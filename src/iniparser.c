@@ -42,8 +42,12 @@ typedef enum _line_status_ {
   At most len - 1 elements of the input string will be converted.
  */
 /*--------------------------------------------------------------------------*/
-static const char * strlwc(const char * in, char *out, unsigned len)
+static const char * strlwc(const dictionary *d, const char * in, char *out, size_t len)
 {
+    // PacketSender is case sensitive.
+    if (d->caseSensitive) {
+        return in;
+    }
     unsigned i ;
 
     if (in==NULL || out == NULL || len==0) return NULL ;
@@ -84,7 +88,7 @@ static char * xstrdup(const char * s)
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Remove blanks at the beginning and the end of a string.
-  @param    str  String to parse and alter.
+  @param    s  String to parse and alter.
   @return   unsigned New size of the string.
  */
 /*--------------------------------------------------------------------------*/
@@ -105,7 +109,7 @@ static unsigned strstrip(char * s)
     *last = (char)0;
 
     memmove(dest,s,last - s + 1);
-    return last - s;
+    return (unsigned)(last - s);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -219,7 +223,6 @@ const char * iniparser_getsecname(const dictionary * d, int n)
   @brief    Dump a dictionary to an opened file pointer.
   @param    d   Dictionary to dump.
   @param    f   Opened file pointer to dump to.
-  @return   void
 
   This function prints out the contents of a dictionary, one element by
   line, onto the provided file pointer. It is OK to specify @c stderr
@@ -249,7 +252,6 @@ void iniparser_dump(const dictionary * d, FILE * f)
   @brief    Save a dictionary to a loadable ini file
   @param    d   Dictionary to dump
   @param    f   Opened file pointer to dump to
-  @return   void
 
   This function dumps a given dictionary into a loadable ini file.
   It is Ok to specify @c stderr or @c stdout as output files.
@@ -287,7 +289,6 @@ void iniparser_dump_ini(const dictionary * d, FILE * f)
   @param    d   Dictionary to dump
   @param    s   Section name of dictionary to dump
   @param    f   Opened file pointer to dump to
-  @return   void
 
   This function dumps a given section of a given dictionary into a loadable ini
   file.  It is Ok to specify @c stderr or @c stdout as output files.
@@ -339,7 +340,7 @@ int iniparser_getsecnkeys(const dictionary * d, const char * s)
     if (! iniparser_find_entry(d, s)) return nkeys;
 
     seclen  = (int)strlen(s);
-    strlwc(s, keym, sizeof(keym));
+    strlwc(d, s, keym, sizeof(keym));
     keym[seclen] = ':';
 
     for (j=0 ; j<d->size ; j++) {
@@ -378,7 +379,7 @@ const char ** iniparser_getseckeys(const dictionary * d, const char * s, const c
     if (! iniparser_find_entry(d, s)) return NULL;
 
     seclen  = (int)strlen(s);
-    strlwc(s, keym, sizeof(keym));
+    strlwc(d, s, keym, sizeof(keym));
     keym[seclen] = ':';
 
     i = 0;
@@ -419,7 +420,7 @@ const char * iniparser_getstring(const dictionary * d, const char * key, const c
     if (d==NULL || key==NULL)
         return def ;
 
-    lc_key = strlwc(key, tmp_str, sizeof(tmp_str));
+    lc_key = strlwc(d, key, tmp_str, sizeof(tmp_str));
     sval = dictionary_get(d, lc_key, def);
     return sval ;
 }
@@ -601,7 +602,7 @@ int iniparser_find_entry(const dictionary * ini, const char * entry)
 int iniparser_set(dictionary * ini, const char * entry, const char * val)
 {
     char tmp_str[ASCIILINESZ+1];
-    return dictionary_set(ini, strlwc(entry, tmp_str, sizeof(tmp_str)), val) ;
+    return dictionary_set(ini, strlwc(ini, entry, tmp_str, sizeof(tmp_str)), val) ;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -609,7 +610,6 @@ int iniparser_set(dictionary * ini, const char * entry, const char * val)
   @brief    Delete an entry in a dictionary
   @param    ini     Dictionary to modify
   @param    entry   Entry to delete (entry name)
-  @return   void
 
   If the given entry can be found, it is deleted from the dictionary.
  */
@@ -617,7 +617,7 @@ int iniparser_set(dictionary * ini, const char * entry, const char * val)
 void iniparser_unset(dictionary * ini, const char * entry)
 {
     char tmp_str[ASCIILINESZ+1];
-    dictionary_unset(ini, strlwc(entry, tmp_str, sizeof(tmp_str)));
+    dictionary_unset(ini, strlwc(ini, entry, tmp_str, sizeof(tmp_str)));
 }
 
 /*-------------------------------------------------------------------------*/
@@ -631,6 +631,7 @@ void iniparser_unset(dictionary * ini, const char * entry)
  */
 /*--------------------------------------------------------------------------*/
 static line_status iniparser_line(
+    dictionary * d,
     const char * input_line,
     char * section,
     char * key,
@@ -654,19 +655,19 @@ static line_status iniparser_line(
         /* Section name */
         sscanf(line, "[%[^]]", section);
         strstrip(section);
-        strlwc(section, section, len);
+        strlwc(d, section, section, len);
         sta = LINE_SECTION ;
     } else if (sscanf (line, "%[^=] = \"%[^\"]\"", key, value) == 2
            ||  sscanf (line, "%[^=] = '%[^\']'",   key, value) == 2) {
         /* Usual key=value with quotes, with or without comments */
         strstrip(key);
-        strlwc(key, key, len);
+        strlwc(d, key, key, len);
         /* Don't strip spaces from values surrounded with quotes */
         sta = LINE_VALUE ;
     } else if (sscanf (line, "%[^=] = %[^;#]", key, value) == 2) {
         /* Usual key=value without quotes, with or without comments */
         strstrip(key);
-        strlwc(key, key, len);
+        strlwc(d, key, key, len);
         strstrip(value);
         /*
          * sscanf cannot handle '' or "" as empty values
@@ -685,7 +686,7 @@ static line_status iniparser_line(
          * key=#
          */
         strstrip(key);
-        strlwc(key, key, len);
+        strlwc(d, key, key, len);
         value[0]=0 ;
         sta = LINE_VALUE ;
     } else {
@@ -778,7 +779,7 @@ dictionary * iniparser_load(const char * ininame)
         } else {
             last=0 ;
         }
-        switch (iniparser_line(line, section, key, val)) {
+        switch (iniparser_line(dict, line, section, key, val)) {
             case LINE_EMPTY:
             case LINE_COMMENT:
             break ;
@@ -823,7 +824,6 @@ dictionary * iniparser_load(const char * ininame)
 /**
   @brief    Free all memory associated to an ini dictionary
   @param    d Dictionary to free
-  @return   void
 
   Free all memory associated to an ini dictionary.
   It is mandatory to call this function before the dictionary object

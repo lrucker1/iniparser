@@ -40,10 +40,12 @@ extern "C" {
   association is identified by a unique string key. Looking up values
   in the dictionary is speeded up by the use of a (hopefully collision-free)
   hash function.
+   Yes, case-sensitive keys are totally counter to the spec, but PacketSender is being idiosyncratic.
  */
 /*-------------------------------------------------------------------------*/
 typedef struct _dictionary_ {
     int             n ;     /** Number of entries in dictionary */
+    int             caseSensitive; /** */
     ssize_t         size ;  /** Storage size */
     char        **  val ;   /** List of string values */
     char        **  key ;   /** List of string keys */
@@ -85,8 +87,7 @@ dictionary * dictionary_new(size_t size);
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Delete a dictionary object
-  @param    d   dictionary object to deallocate.
-  @return   void
+  @param    vd   dictionary object to deallocate.
 
   Deallocate a dictionary object and all memory associated to it.
  */
@@ -113,7 +114,7 @@ const char * dictionary_get(const dictionary * d, const char * key, const char *
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Set a value in a dictionary.
-  @param    d       dictionary object to modify.
+  @param    vd       dictionary object to modify.
   @param    key     Key to modify or add.
   @param    val     Value to add.
   @return   int     0 if Ok, anything else otherwise
@@ -143,7 +144,6 @@ int dictionary_set(dictionary * vd, const char * key, const char * val);
   @brief    Delete a key in a dictionary
   @param    d       dictionary object to modify.
   @param    key     Key to remove.
-  @return   void
 
   This function deletes a key in a dictionary. Nothing is done if the
   key cannot be found.
@@ -157,14 +157,13 @@ void dictionary_unset(dictionary * d, const char * key);
   @brief    Dump a dictionary to an opened file pointer.
   @param    d   Dictionary to dump
   @param    f   Opened file pointer.
-  @return   void
 
   Dumps a dictionary onto an opened file pointer. Key pairs are printed out
   as @c [Key]=[Value], one per line. It is Ok to provide stdout or stderr as
   output file pointers.
  */
 /*--------------------------------------------------------------------------*/
-void dictionary_dump(const dictionary * d, FILE * out);
+void dictionary_dump(const dictionary * d, FILE * f);
 
 #ifdef __cplusplus
 }
